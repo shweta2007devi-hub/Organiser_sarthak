@@ -2,34 +2,34 @@
 
 * Team Name
 
-[Your Team Name]
+tech codex
 
 * Project Name
 
-[Your Project Name]
+[web development]
 
 * Selected Track
 
 [Track Name – e.g., AI/ML, Web3, Healthcare, Sustainability, etc.]
 
-* Selected Problem Statement (PS)
-
-[Problem Statement ID / Title]
+* Selected Problem
+* WD-32 / E commerce website]
 
 * Team Leader
 
-Name: [Leader Name]
-Phone: [Phone Number]
+Name: [shweta devi]
+Phone: [9044280503]
 
 * Team Members & Roles
 Name	Role
-[Member 1 Name]	[Role – e.g., Frontend Developer]
-[Member 2 Name]	[Role – Backend Developer]
-[Member 3 Name]	[Role – AI/ML Engineer]
+[Member 1 shweta]	[Role – e.g., Frontend Developer]
+[Member 2 amrita]	[Role – Backend Developer]
+[Member 3 gudiya]	[Role – AI/ML Engineer]
 
  * Project Description
 
-[Write your project description here. Use this structure for best impact:]
+Project Description:
+This project focuses on developing a user-friendly and secure E-Commerce website that enables customers to browse products, add items to a cart, and make online purchases efficiently. The system includes features like product search, user authentication, order management, and online payment integration. It aims to provide a smooth shopping experience while helping businesses manage inventory and sales digitally. The project demonstrates practical implementation of web development technologies and modern online transaction systems.
 
 Problem:
 Briefly explain the real-world problem you are solving.
