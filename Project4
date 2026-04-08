@@ -1,0 +1,26 @@
+const services = [
+    { name: "Plumber", phone: "9876543210" },
+    { name: "Electrician", phone: "9123456780" },
+    { name: "Tutor", phone: "9988776655" }
+];
+
+const container = document.getElementById("services");
+
+function displayServices(data) {
+    container.innerHTML = "";
+    data.forEach(service => {
+        container.innerHTML += `
+            <div class="card">
+                <h3>${service.name}</h3>
+                <p>Contact: ${service.phone}</p>
+                <button onclick="call('${service.phone}')">Call</button>
+            </div>
+        `;
+    });
+}
+
+function call(phone) {
+    alert("Calling " + phone);
+}
+
+displayServices(services);
