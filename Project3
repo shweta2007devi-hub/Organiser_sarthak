@@ -1,0 +1,17 @@
+body {
+    font-family: Arial;
+    text-align: center;
+}
+
+#services {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.card {
+    border: 1px solid #ccc;
+    padding: 15px;
+    margin: 10px;
+    width: 200px;
+}
