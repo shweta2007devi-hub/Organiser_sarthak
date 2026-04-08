@@ -1,0 +1,15 @@
+service-marketplace/
+│
+├── backend/
+│   ├── server.js
+│   ├── models/
+│   │     ├── User.js
+│   │     └── Service.js
+│   ├── routes/
+│   │     ├── userRoutes.js
+│   │     └── serviceRoutes.js
+│
+├── frontend/
+│   ├── index.html
+│   ├── style.css
+│   └── script.js
