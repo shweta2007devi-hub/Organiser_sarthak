@@ -1,0 +1,1987 @@
+import React, { useState, createContext, useContext, useEffect } from 'react';
+import { 
+  Search, Menu, X, User, LogOut, Star, MapPin, Calendar, 
+  Clock, CheckCircle, XCircle, Wrench, Zap, BookOpen, Truck, 
+  Moon, Sun, Plus, Shield, ArrowRight, DollarSign
+} from 'lucide-react';
+
+// --- MOCK DATABASE (Simulating MongoDB) ---
+const INITIAL_USERS = [
+  { id: 'u1', name: 'Alice Customer', email: 'alice@test.com', password: 'pass', role: 'customer' },
+  { id: 'u2', name: 'Bob Plumber', email: 'bob@test.com', password: 'pass', role: 'provider', phone: '123-456-7890' },
+  { id: 'u3', name: 'Carol Electrician', email: 'carol@test.com', password: 'pass', role: 'provider', phone: '098-765-4321' },
+  { id: 'u4', name: 'Dave Admin', email: 'admin@test.com', password: 'pass', role: 'admin' },
+];
+
+const INITIAL_SERVICES = [
+  { id: 's1', providerId: 'u2', category: 'Plumber', title: 'Emergency Pipe Repair', description: 'Fast and reliable pipe fixing within hours.', price: 50, location: 'Downtown', rating: 4.8, reviews: 12 },
+  { id: 's2', providerId: 'u2', category: 'Plumber', title: 'Full Bathroom Fitting', description: 'Complete bathroom renovation and plumbing.', price: 500, location: 'Northside', rating: 4.5, reviews: 8 },
+  { id: 's3', providerId: 'u3', category: 'Electrician', title: 'Wiring & Circuit Fix', description: 'Safe and certified electrical repairs.', price: 80, location: 'All Areas', rating: 4.9, reviews: 24 },
+  { id: 's4', providerId: 'u3', category: 'Electrician', title: 'Light Fixture Installation', description: 'Modern lighting setup for homes.', price: 40, location: 'West End', rating: 4.7, reviews: 15 },
+];
+
+const INITIAL_BOOKINGS = [
+  { id: 'b1', customerId: 'u1', serviceId: 's1', providerId: 'u2', date: '2026-05-10', time: '10:00 AM', status: 'pending', address: '123 Main St' },
+  { id: 'b2', customerId: 'u1', serviceId: 's3', providerId: 'u3', date: '2026-05-12', time: '02:00 PM', status: 'accepted', address: '123 Main St' },
+];
+
+// --- CONTEXT (Simulating Backend API & State Management) ---
+const AppContext = createContext();
+
+const AppProvider = ({ children }) => {
+  const [users, setUsers] = useState(INITIAL_USERS);
+  const [services, setServices] = useState(INITIAL_SERVICES);
+  const [bookings, setBookings] = useState(INITIAL_BOOKINGS);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [darkMode, setDarkMode] = useState(false);
+
+  // Auth APIs
+  const login = (email, password) => {
+    const user = users.find(u => u.email === email && u.password === password);
+    if (user) {
+      setCurrentUser(user);
+      return { success: true };
+    }
+    return { success: false, message: 'Invalid credentials' };
+  };
+
+  const signup = (userData) => {
+    if (users.find(u => u.email === userData.email)) {
+      return { success: false, message: 'Email already exists' };
+    }
+    const newUser = { ...userData, id: `u${Date.now()}` };
+    setUsers([...users, newUser]);
+    setCurrentUser(newUser);
+    return { success: true };
+  };
+
+  const logout = () => setCurrentUser(null);
+
+  // Service APIs
+  const addService = (serviceData) => {
+    const newService = { ...serviceData, id: `s${Date.now()}`, providerId: currentUser.id, rating: 0, reviews: 0 };
+    setServices([...services, newService]);
+  };
+
+  const deleteService = (id) => setServices(services.filter(s => s.id !== id));
+
+  // Booking APIs
+  const createBooking = (bookingData) => {
+    const newBooking = { ...bookingData, id: `b${Date.now()}`, customerId: currentUser.id, status: 'pending' };
+    setBookings([...bookings, newBooking]);
+    return { success: true };
+  };
+
+  const updateBookingStatus = (id, status) => {
+    setBookings(bookings.map(b => b.id === id ? { ...b, status } : b));
+  };
+
+  const toggleDarkMode = () => setDarkMode(!darkMode);
+
+  return (
+    <AppContext.Provider value={{
+      users, services, bookings, currentUser, darkMode,
+      login, signup, logout, addService, deleteService, createBooking, updateBookingStatus, toggleDarkMode
+    }}>
+      {children}
+    </AppContext.Provider>
+  );
+};
+
+export const useAppContext = () => useContext(AppContext);
+
+// --- REUSABLE COMPONENTS ---
+const Button = ({ children, variant = 'primary', className = '', ...props }) => {
+  const baseStyle = "px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed";
+  const variants = {
+    primary: "bg-blue-600 text-white hover:bg-blue-700 shadow-md",
+    secondary: "bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600",
+    outline: "border-2 border-blue-600 text-blue-600 hover:bg-blue-50 dark:border-blue-500 dark:text-blue-500 dark:hover:bg-blue-900/20",
+    danger: "bg-red-500 text-white hover:bg-red-600",
+    success: "bg-green-500 text-white hover:bg-green-600",
+    ghost: "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
+  };
+  return (
+    <button className={`${baseStyle} ${variants[variant]} ${className}`} {...props}>
+      {children}
+    </button>
+  );
+};
+
+const Input = ({ label, className = '', ...props }) => (
+  <div className={`flex flex-col gap-1 ${className}`}>
+    {label && <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>}
+    <input 
+      className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+      {...props}
+    />
+  </div>
+);
+
+const Badge = ({ children, type = 'default' }) => {
+  const types = {
+    default: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
+    success: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+    warning: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+    danger: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+    blue: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
+  };
+  return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${types[type]}`}>{children}</span>;
+}
+
+// --- PAGE COMPONENTS ---
+
+const Home = ({ navigate }) => {
+  const { services } = useAppContext();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [location, setLocation] = useState('');
+
+  const categories = [
+    { name: 'Plumber', icon: Wrench, color: 'text-orange-500', bg: 'bg-orange-100 dark:bg-orange-900/20' },
+    { name: 'Electrician', icon: Zap, color: 'text-yellow-500', bg: 'bg-yellow-100 dark:bg-yellow-900/20' },
+    { name: 'Tutor', icon: BookOpen, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/20' },
+    { name: 'Delivery', icon: Truck, color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/20' },
+  ];
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    navigate('services', { search: searchTerm, location });
+  };
+
+  return (
+    <div className="flex flex-col gap-16 pb-16">
+      {/* Hero Section */}
+      <section className="relative bg-blue-600 dark:bg-blue-900 text-white py-24 px-4 overflow-hidden">
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white to-transparent"></div>
+        <div className="max-w-4xl mx-auto text-center relative z-10">
+          <h1 className="text-4xl md:text-6xl font-bold mb-6 tracking-tight">Your Neighbourhood Experts, <br/>Just a Click Away.</h1>
+          <p className="text-lg md:text-xl text-blue-100 mb-10">Find trusted plumbers, electricians, tutors, and more in your local area instantly.</p>
+          
+          <form onSubmit={handleSearch} className="bg-white dark:bg-gray-800 p-2 rounded-2xl shadow-2xl flex flex-col md:flex-row gap-2 max-w-3xl mx-auto">
+            <div className="flex-1 flex items-center px-4 py-2 border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700">
+              <Search className="text-gray-400 w-5 h-5 mr-3" />
+              <input 
+                type="text" 
+                placeholder="What service do you need?" 
+                className="w-full bg-transparent text-gray-900 dark:text-white outline-none"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div className="flex-1 flex items-center px-4 py-2">
+              <MapPin className="text-gray-400 w-5 h-5 mr-3" />
+              <input 
+                type="text" 
+                placeholder="Your location" 
+                className="w-full bg-transparent text-gray-900 dark:text-white outline-none"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+              />
+            </div>
+            <Button type="submit" className="md:w-auto w-full py-3 px-8 rounded-xl text-lg">Search</Button>
+          </form>
+        </div>
+      </section>
+
+      {/* Categories */}
+      <section className="max-w-7xl mx-auto px-4 w-full">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-8">Explore Categories</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          {categories.map(cat => (
+            <div 
+              key={cat.name} 
+              onClick={() => navigate('services', { category: cat.name })}
+              className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all"
+            >
+              <div className={`p-4 rounded-full ${cat.bg}`}>
+                <cat.icon className={`w-8 h-8 ${cat.color}`} />
+              </div>
+              <span className="font-medium text-gray-800 dark:text-gray-200">{cat.name}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Featured Services */}
+      <section className="max-w-7xl mx-auto px-4 w-full bg-gray-50 dark:bg-gray-800/50 py-12 rounded-3xl">
+        <div className="flex justify-between items-end mb-8">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Highly Rated Services</h2>
+            <p className="text-gray-600 dark:text-gray-400">Trusted professionals based on user reviews.</p>
+          </div>
+          <Button variant="ghost" onClick={() => navigate('services')}>View All <ArrowRight className="w-4 h-4" /></Button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {services.slice(0, 3).map(service => (
+             <ServiceCard key={service.id} service={service} navigate={navigate} />
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+};
+
+const ServiceCard = ({ service, navigate }) => {
+  const { users } = useAppContext();
+  const provider = users.find(u => u.id === service.providerId);
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-shadow flex flex-col h-full">
+      <div className="h-48 bg-gray-200 dark:bg-gray-700 relative flex items-center justify-center">
+         {/* Placeholder Image logic based on category */}
+         {service.category === 'Plumber' && <Wrench className="w-16 h-16 text-gray-400 opacity-50" />}
+         {service.category === 'Electrician' && <Zap className="w-16 h-16 text-gray-400 opacity-50" />}
+         <Badge type="blue" className="absolute top-4 left-4 shadow-sm">{service.category}</Badge>
+      </div>
+      <div className="p-6 flex flex-col flex-grow">
+        <div className="flex justify-between items-start mb-2">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white line-clamp-1">{service.title}</h3>
+          <div className="flex items-center gap-1 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-1 rounded text-sm font-medium">
+            <Star className="w-4 h-4 fill-current" /> {service.rating}
+          </div>
+        </div>
+        <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-2">{service.description}</p>
+        
+        <div className="mt-auto space-y-3">
+          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+            <User className="w-4 h-4" /> {provider?.name}
+          </div>
+          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-4">
+            <MapPin className="w-4 h-4" /> {service.location}
+          </div>
+          <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
+            <div className="font-bold text-2xl text-gray-900 dark:text-white">${service.price}</div>
+            <Button onClick={() => navigate('service_detail', { id: service.id })}>View Details</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Auth = ({ navigate }) => {
+  const { login, signup, currentUser } = useAppContext();
+  const [isLogin, setIsLogin] = useState(true);
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'customer' });
+  const [error, setError] = useState('');
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (currentUser) {
+      navigate(`dashboard_${currentUser.role}`);
+    }
+  }, [currentUser, navigate]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setError('');
+    
+    if (isLogin) {
+      const res = login(formData.email, formData.password);
+      if (!res.success) setError(res.message);
+    } else {
+      if (!formData.name || !formData.email || !formData.password) {
+        setError("All fields are required.");
+        return;
+      }
+      const res = signup(formData);
+      if (!res.success) setError(res.message);
+    }
+  };
+
+  return (
+    <div className="min-h-[80vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700">
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{isLogin ? 'Welcome Back' : 'Create Account'}</h2>
+          <p className="text-gray-500 dark:text-gray-400 mt-2">{isLogin ? 'Sign in to access your dashboard' : 'Join NeighbourHub today'}</p>
+        </div>
+
+        {error && <div className="bg-red-50 text-red-500 p-3 rounded-lg mb-6 text-sm text-center">{error}</div>}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {!isLogin && (
+            <>
+              <Input 
+                label="Full Name" 
+                placeholder="John Doe" 
+                value={formData.name}
+                onChange={e => setFormData({...formData, name: e.target.value})}
+              />
+              <div className="flex gap-4 p-1 bg-gray-100 dark:bg-gray-900 rounded-lg">
+                <button
+                  type="button"
+                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${formData.role === 'customer' ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'}`}
+                  onClick={() => setFormData({...formData, role: 'customer'})}
+                >Customer</button>
+                <button
+                  type="button"
+                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${formData.role === 'provider' ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'}`}
+                  onClick={() => setFormData({...formData, role: 'provider'})}
+                >Service Provider</button>
+              </div>
+            </>
+          )}
+          <Input 
+            type="email" 
+            label="Email Address" 
+            placeholder="you@example.com" 
+            value={formData.email}
+            onChange={e => setFormData({...formData, email: e.target.value})}
+          />
+          <Input 
+            type="password" 
+            label="Password" 
+            placeholder="••••••••" 
+            value={formData.password}
+            onChange={e => setFormData({...formData, password: e.target.value})}
+          />
+          
+          <Button type="submit" className="w-full py-3">{isLogin ? 'Sign In' : 'Sign Up'}</Button>
+        </form>
+
+        <p className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
+          {isLogin ? "Don't have an account? " : "Already have an account? "}
+          <button onClick={() => { setIsLogin(!isLogin); setError(''); }} className="font-semibold text-blue-600 hover:text-blue-500">
+            {isLogin ? 'Sign up' : 'Sign in'}
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+};
+
+const ServicesList = ({ navigate, searchParams }) => {
+  const { services } = useAppContext();
+  const [filteredServices, setFilteredServices] = useState(services);
+  const [filterCat, setFilterCat] = useState(searchParams?.category || 'All');
+
+  useEffect(() => {
+    let result = services;
+    if (filterCat !== 'All') {
+      result = result.filter(s => s.category === filterCat);
+    }
+    if (searchParams?.search) {
+      const lowerSearch = searchParams.search.toLowerCase();
+      result = result.filter(s => s.title.toLowerCase().includes(lowerSearch) || s.description.toLowerCase().includes(lowerSearch));
+    }
+    setFilteredServices(result);
+  }, [services, filterCat, searchParams]);
+
+  const categories = ['All', 'Plumber', 'Electrician', 'Tutor', 'Delivery'];
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-8 flex flex-col md:flex-row gap-8">
+      {/* Sidebar Filters */}
+      <aside className="w-full md:w-64 flex-shrink-0">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 sticky top-24">
+          <h3 className="font-bold text-lg mb-4 text-gray-900 dark:text-white">Filters</h3>
+          
+          <div className="mb-6">
+            <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wider">Categories</h4>
+            <div className="space-y-2">
+              {categories.map(cat => (
+                <label key={cat} className="flex items-center gap-3 cursor-pointer">
+                  <input 
+                    type="radio" 
+                    name="category" 
+                    className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    checked={filterCat === cat}
+                    onChange={() => setFilterCat(cat)}
+                  />
+                  <span className="text-gray-700 dark:text-gray-300">{cat}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            {searchParams?.search ? `Search results for "${searchParams.search}"` : 'All Services'}
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-2">Showing {filteredServices.length} results</p>
+        </div>
+
+        {filteredServices.length === 0 ? (
+          <div className="text-center py-20 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-dashed border-gray-300 dark:border-gray-600">
+            <Search className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-2">No services found</h3>
+            <p className="text-gray-500">Try adjusting your filters or search terms.</p>
+            <Button className="mt-4" onClick={() => setFilterCat('All')}>Clear Filters</Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            {filteredServices.map(service => (
+              <ServiceCard key={service.id} service={service} navigate={navigate} />
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+};
+
+const ServiceDetail = ({ navigate, serviceId }) => {
+  const { services, users, currentUser } = useAppContext();
+  const service = services.find(s => s.id === serviceId);
+  
+  if (!service) return <div className="text-center py-20">Service not found.</div>;
+  
+  const provider = users.find(u => u.id === service.providerId);
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <Button variant="ghost" className="mb-6 -ml-4" onClick={() => navigate('services')}>&larr; Back to services</Button>
+      
+      <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden">
+        <div className="h-64 bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center relative">
+            <Badge type="blue" className="absolute top-6 left-6 text-sm">{service.category}</Badge>
+            {service.category === 'Plumber' && <Wrench className="w-24 h-24 text-blue-200 dark:text-blue-800" />}
+            {service.category === 'Electrician' && <Zap className="w-24 h-24 text-yellow-200 dark:text-yellow-800" />}
+        </div>
+        
+        <div className="p-8 md:p-12">
+          <div className="flex flex-col md:flex-row justify-between items-start gap-6 mb-8">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">{service.title}</h1>
+              <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                <div className="flex items-center gap-1 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-3 py-1 rounded-full font-medium">
+                  <Star className="w-4 h-4 fill-current" /> {service.rating} ({service.reviews} reviews)
+                </div>
+                <div className="flex items-center gap-1"><MapPin className="w-4 h-4"/> {service.location}</div>
+              </div>
+            </div>
+            <div className="text-center bg-gray-50 dark:bg-gray-700 p-6 rounded-2xl min-w-[200px]">
+              <div className="text-gray-500 text-sm mb-1">Starting from</div>
+              <div className="text-4xl font-bold text-gray-900 dark:text-white mb-4">${service.price}</div>
+              <Button 
+                className="w-full py-3 text-lg"
+                onClick={() => currentUser ? navigate('booking', { serviceId: service.id }) : navigate('auth')}
+              >
+                Book Now
+              </Button>
+              {!currentUser && <p className="text-xs text-gray-500 mt-2">Requires login</p>}
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 dark:border-gray-700 pt-8 mt-8 grid md:grid-cols-3 gap-8">
+            <div className="md:col-span-2 space-y-6">
+              <section>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">About this service</h3>
+                <p className="text-gray-600 dark:text-gray-400 leading-relaxed">{service.description}</p>
+                <p className="text-gray-600 dark:text-gray-400 leading-relaxed mt-4">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+              </section>
+            </div>
+            
+            <aside className="bg-gray-50 dark:bg-gray-800/50 p-6 rounded-2xl h-fit">
+              <h3 className="font-bold text-gray-900 dark:text-white mb-4">Service Provider</h3>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-xl">
+                  {provider?.name.charAt(0)}
+                </div>
+                <div>
+                  <div className="font-medium text-gray-900 dark:text-white">{provider?.name}</div>
+                  <div className="text-sm text-gray-500">Verified Professional</div>
+                </div>
+              </div>
+              <Button variant="outline" className="w-full">Contact Provider</Button>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const BookingPage = ({ navigate, serviceId }) => {
+  const { services, createBooking } = useAppContext();
+  const service = services.find(s => s.id === serviceId);
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
+  const [address, setAddress] = useState('');
+  const [isSuccess, setIsSuccess] = useState(false);
+
+  if (!service) return null;
+
+  const handleBook = (e) => {
+    e.preventDefault();
+    createBooking({ serviceId: service.id, providerId: service.providerId, date, time, address });
+    setIsSuccess(true);
+  };
+
+  if (isSuccess) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-20 text-center">
+        <div className="w-20 h-20 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
+          <CheckCircle className="w-10 h-10" />
+        </div>
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Booking Confirmed!</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-8">Your request for {service.title} has been sent to the provider. You can track its status in your dashboard.</p>
+        <Button onClick={() => navigate('dashboard_customer')} className="w-full">Go to Dashboard</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-12">
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Complete Your Booking</h1>
+      
+      <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="flex gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-2xl mb-8">
+           <div className="w-16 h-16 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
+             <Wrench className="text-blue-500" />
+           </div>
+           <div>
+             <h3 className="font-bold text-lg text-gray-900 dark:text-white">{service.title}</h3>
+             <p className="text-gray-500 text-sm">${service.price} • {service.location}</p>
+           </div>
+        </div>
+
+        <form onSubmit={handleBook} className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <Input 
+              type="date" 
+              label="Select Date" 
+              required 
+              value={date}
+              onChange={e => setDate(e.target.value)}
+            />
+            <Input 
+              type="time" 
+              label="Select Time" 
+              required 
+              value={time}
+              onChange={e => setTime(e.target.value)}
+            />
+          </div>
+          <Input 
+            label="Service Address" 
+            placeholder="Enter full address details" 
+            required 
+            value={address}
+            onChange={e => setAddress(e.target.value)}
+          />
+          <div className="border-t border-gray-100 dark:border-gray-700 pt-6 mt-6">
+            <div className="flex justify-between items-center mb-6">
+              <span className="text-lg font-medium text-gray-700 dark:text-gray-300">Total to pay</span>
+              <span className="text-2xl font-bold text-gray-900 dark:text-white">${service.price}</span>
+            </div>
+            <Button type="submit" className="w-full py-4 text-lg">Confirm Booking</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// --- DASHBOARDS ---
+
+const DashboardLayout = ({ title, children, navigate }) => {
+  const { logout, currentUser } = useAppContext();
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-8 flex flex-col md:flex-row gap-8">
+      <aside className="w-full md:w-64 flex-shrink-0">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-xl">
+              {currentUser.name.charAt(0)}
+            </div>
+            <div>
+              <div className="font-bold text-gray-900 dark:text-white truncate">{currentUser.name}</div>
+              <div className="text-xs text-gray-500 uppercase tracking-wider">{currentUser.role}</div>
+            </div>
+          </div>
+          <nav className="space-y-2">
+            <Button variant="ghost" className="w-full justify-start text-blue-600 bg-blue-50 dark:bg-blue-900/20">Dashboard Home</Button>
+            <Button variant="ghost" className="w-full justify-start">Profile Settings</Button>
+            <Button 
+              variant="ghost" 
+              className="w-full justify-start text-red-500 hover:bg-red-50 hover:text-red-600"
+              onClick={() => { logout(); navigate('home'); }}
+            >
+              <LogOut className="w-4 h-4 mr-2" /> Logout
+            </Button>
+          </nav>
+        </div>
+      </aside>
+      <main className="flex-1">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">{title}</h1>
+        {children}
+      </main>
+    </div>
+  );
+};
+
+const CustomerDashboard = ({ navigate }) => {
+  const { bookings, services, currentUser } = useAppContext();
+  const myBookings = bookings.filter(b => b.customerId === currentUser.id);
+
+  const getStatusBadge = (status) => {
+    switch(status) {
+      case 'pending': return <Badge type="warning">Pending</Badge>;
+      case 'accepted': return <Badge type="success">Accepted</Badge>;
+      case 'rejected': return <Badge type="danger">Rejected</Badge>;
+      case 'completed': return <Badge type="blue">Completed</Badge>;
+      default: return <Badge>{status}</Badge>;
+    }
+  };
+
+  return (
+    <DashboardLayout title="My Bookings" navigate={navigate}>
+      {myBookings.length === 0 ? (
+        <div className="bg-white dark:bg-gray-800 p-12 rounded-2xl text-center border border-gray-100 dark:border-gray-700">
+          <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No bookings yet</h3>
+          <Button onClick={() => navigate('services')}>Explore Services</Button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {myBookings.map(booking => {
+            const service = services.find(s => s.id === booking.serviceId);
+            return (
+              <div key={booking.id} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                   <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center">
+                     <Wrench className="text-gray-500" />
+                   </div>
+                   <div>
+                     <h4 className="font-bold text-gray-900 dark:text-white">{service?.title || 'Unknown Service'}</h4>
+                     <p className="text-sm text-gray-500 flex items-center gap-2 mt-1">
+                        <Calendar className="w-3 h-3" /> {booking.date} at {booking.time}
+                     </p>
+                   </div>
+                </div>
+                <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+                   {getStatusBadge(booking.status)}
+                   <Button variant="outline" size="sm" onClick={() => navigate('service_detail', { id: booking.serviceId })}>View</Button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </DashboardLayout>
+  );
+};
+
+const ProviderDashboard = ({ navigate }) => {
+  const { bookings, services, currentUser, updateBookingStatus, addService } = useAppContext();
+  const [activeTab, setActiveTab] = useState('requests');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newService, setNewService] = useState({ title: '', category: 'Plumber', price: '', description: '', location: '' });
+
+  const myServices = services.filter(s => s.providerId === currentUser.id);
+  const myRequests = bookings.filter(b => b.providerId === currentUser.id);
+
+  const handleAddService = (e) => {
+    e.preventDefault();
+    addService({ ...newService, price: Number(newService.price) });
+    setShowAddForm(false);
+    setNewService({ title: '', category: 'Plumber', price: '', description: '', location: '' });
+  };
+
+  return (
+    <DashboardLayout title="Provider Dashboard" navigate={navigate}>
+      <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">
+        <button 
+          className={`py-3 px-6 font-medium border-b-2 transition-colors ${activeTab === 'requests' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          onClick={() => setActiveTab('requests')}
+        >Booking Requests</button>
+        <button 
+          className={`py-3 px-6 font-medium border-b-2 transition-colors ${activeTab === 'services' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          onClick={() => setActiveTab('services')}
+        >My Services</button>
+      </div>
+
+      {activeTab === 'requests' && (
+        <div className="space-y-4">
+          {myRequests.length === 0 && <p className="text-gray-500">No booking requests yet.</p>}
+          {myRequests.map(req => {
+            const service = services.find(s => s.id === req.serviceId);
+            return (
+              <div key={req.id} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
+                  <div>
+                    <Badge type="warning" className="mb-2">New Request</Badge>
+                    <h4 className="font-bold text-lg text-gray-900 dark:text-white">{service?.title}</h4>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">Requested for: <span className="font-medium text-gray-900 dark:text-white">{req.date} at {req.time}</span></p>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm">Address: {req.address}</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xl font-bold text-gray-900 dark:text-white">${service?.price}</div>
+                  </div>
+                </div>
+                {req.status === 'pending' ? (
+                  <div className="flex gap-3 mt-4 border-t border-gray-100 dark:border-gray-700 pt-4">
+                    <Button variant="success" className="flex-1" onClick={() => updateBookingStatus(req.id, 'accepted')}>Accept</Button>
+                    <Button variant="danger" className="flex-1" onClick={() => updateBookingStatus(req.id, 'rejected')}>Reject</Button>
+                  </div>
+                ) : (
+                  <div className="mt-4 border-t border-gray-100 dark:border-gray-700 pt-4 text-sm font-medium">
+                    Status: <span className={req.status === 'accepted' ? 'text-green-500' : 'text-red-500'}>{req.status.toUpperCase()}</span>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {activeTab === 'services' && (
+        <div>
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Active Listings</h3>
+            <Button onClick={() => setShowAddForm(!showAddForm)}><Plus className="w-4 h-4 mr-2"/> Add New Service</Button>
+          </div>
+
+          {showAddForm && (
+            <form onSubmit={handleAddService} className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-2xl mb-8 border border-blue-100 dark:border-blue-900/30 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="Title" required value={newService.title} onChange={e => setNewService({...newService, title: e.target.value})} />
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
+                  <select 
+                    className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={newService.category} onChange={e => setNewService({...newService, category: e.target.value})}
+                  >
+                    <option>Plumber</option><option>Electrician</option><option>Tutor</option><option>Delivery</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input type="number" label="Price ($)" required value={newService.price} onChange={e => setNewService({...newService, price: e.target.value})} />
+                <Input label="Service Area / Location" required value={newService.location} onChange={e => setNewService({...newService, location: e.target.value})} />
+              </div>
+              <Input label="Description" required value={newService.description} onChange={e => setNewService({...newService, description: e.target.value})} />
+              <div className="flex gap-3 justify-end">
+                <Button type="button" variant="ghost" onClick={() => setShowAddForm(false)}>Cancel</Button>
+                <Button type="submit">Save Service</Button>
+              </div>
+            </form>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {myServices.map(service => (
+              <div key={service.id} className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                <div>
+                  <Badge type="blue" className="mb-2 inline-block">{service.category}</Badge>
+                  <h4 className="font-bold text-gray-900 dark:text-white">{service.title}</h4>
+                  <p className="text-gray-500 text-sm mt-1">${service.price} • {service.location}</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => navigate('service_detail', { id: service.id })}>View</Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </DashboardLayout>
+  );
+};
+
+const AdminDashboard = ({ navigate }) => {
+  const { users, services, bookings } = useAppContext();
+  return (
+    <DashboardLayout title="Admin Control Panel" navigate={navigate}>
+      <div className="grid grid-cols-3 gap-6 mb-8">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+          <div className="text-gray-500 mb-1">Total Users</div>
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">{users.length}</div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+          <div className="text-gray-500 mb-1">Total Services</div>
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">{services.length}</div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+          <div className="text-gray-500 mb-1">Total Bookings</div>
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">{bookings.length}</div>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-gray-100 dark:border-gray-700">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white">Recent Users</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-gray-50 dark:bg-gray-900/50 text-gray-500">
+              <tr>
+                <th className="p-4 font-medium">Name</th>
+                <th className="p-4 font-medium">Email</th>
+                <th className="p-4 font-medium">Role</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+              {users.map(user => (
+                <tr key={user.id} className="text-gray-900 dark:text-gray-200">
+                  <td className="p-4">{user.name}</td>
+                  <td className="p-4">{user.email}</td>
+                  <td className="p-4"><Badge>{user.role}</Badge></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+};
+
+// --- MAIN LAYOUT & ROUTER ---
+
+const Navbar = ({ navigate, currentRoute }) => {
+  const { currentUser, darkMode, toggleDarkMode } = useAppContext();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const NavLinks = () => (
+    <>
+      <button onClick={() => navigate('home')} className={`font-medium ${currentRoute === 'home' ? 'text-blue-600' : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white'}`}>Home</button>
+      <button onClick={() => navigate('services')} className={`font-medium ${currentRoute === 'services' ? 'text-blue-600' : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white'}`}>Services</button>
+      <button onClick={() => navigate('about')} className="font-medium text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">About</button>
+    </>
+  );
+
+  return (
+    <nav className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg border-b border-gray-100 dark:border-gray-800">
+      <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
+        {/* Logo */}
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('home')}>
+          <div className="bg-blue-600 text-white p-2 rounded-xl">
+            <Shield className="w-6 h-6" />
+          </div>
+          <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
+            NeighbourHub
+          </span>
+        </div>
+
+        {/* Desktop Nav */}
+        <div className="hidden md:flex items-center gap-8">
+          <NavLinks />
+        </div>
+
+        {/* Actions */}
+        <div className="hidden md:flex items-center gap-4">
+          <button onClick={toggleDarkMode} className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+            {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
+          
+          {currentUser ? (
+            <Button onClick={() => navigate(`dashboard_${currentUser.role}`)}>
+              <User className="w-4 h-4" /> Dashboard
+            </Button>
+          ) : (
+            <Button onClick={() => navigate('auth')}>Log In / Sign Up</Button>
+          )}
+        </div>
+
+        {/* Mobile Toggle */}
+        <button className="md:hidden p-2 text-gray-600 dark:text-gray-300" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+          {mobileMenuOpen ? <X /> : <Menu />}
+        </button>
+      </div>
+
+      {/* Mobile Menu */}
+      {mobileMenuOpen && (
+        <div className="md:hidden absolute top-20 left-0 right-0 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 p-4 flex flex-col gap-4 shadow-lg">
+          <NavLinks />
+          <hr className="border-gray-100 dark:border-gray-800" />
+          <div className="flex justify-between items-center">
+            <span className="text-gray-600 dark:text-gray-300">Theme</span>
+            <button onClick={toggleDarkMode} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full">
+              {darkMode ? <Sun className="w-5 h-5 text-gray-300" /> : <Moon className="w-5 h-5 text-gray-600" />}
+            </button>
+          </div>
+          {currentUser ? (
+            <Button onClick={() => { navigate(`dashboard_${currentUser.role}`); setMobileMenuOpen(false); }} className="w-full">Dashboard</Button>
+          ) : (
+            <Button onClick={() => { navigate('auth'); setMobileMenuOpen(false); }} className="w-full">Log In / Sign Up</Button>
+          )}
+        </div>
+      )}
+    </nav>
+  );
+};
+
+const Footer = () => (
+  <footer className="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 pt-16 pb-8 mt-auto">
+    <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
+      <div className="col-span-1 md:col-span-2">
+        <div className="flex items-center gap-2 mb-4">
+          <Shield className="w-6 h-6 text-blue-600" />
+          <span className="text-xl font-bold text-gray-900 dark:text-white">NeighbourHub</span>
+        </div>
+        <p className="text-gray-500 dark:text-gray-400 max-w-sm">
+          Connecting local communities with trusted service professionals. Building better neighbourhoods, one service at a time.
+        </p>
+      </div>
+      <div>
+        <h4 className="font-bold text-gray-900 dark:text-white mb-4">Quick Links</h4>
+        <ul className="space-y-2 text-gray-500 dark:text-gray-400">
+          <li><a href="#" className="hover:text-blue-600">Home</a></li>
+          <li><a href="#" className="hover:text-blue-600">All Services</a></li>
+          <li><a href="#" className="hover:text-blue-600">How it Works</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 className="font-bold text-gray-900 dark:text-white mb-4">Support</h4>
+        <ul className="space-y-2 text-gray-500 dark:text-gray-400">
+          <li><a href="#" className="hover:text-blue-600">Help Center</a></li>
+          <li><a href="#" className="hover:text-blue-600">Terms of Service</a></li>
+          <li><a href="#" className="hover:text-blue-600">Privacy Policy</a></li>
+        </ul>
+      </div>
+    </div>
+    <div className="text-center text-gray-400 text-sm">
+      &copy; {new Date().getFullYear()} NeighbourHub. All rights reserved. (Simulated Demo)
+    </div>
+  </footer>
+);
+
+// Simple placeholders for About/Contact to keep file size reasonable but routing complete
+const About = () => <div className="max-w-3xl mx-auto py-20 px-4 text-center"><h1 className="text-4xl font-bold mb-4 dark:text-white">About Us</h1><p className="text-gray-600 dark:text-gray-300">We are on a mission to organize local services.</p></div>;
+const Contact = () => <div className="max-w-3xl mx-auto py-20 px-4 text-center"><h1 className="text-4xl font-bold mb-4 dark:text-white">Contact</h1><p className="text-gray-600 dark:text-gray-300">support@neighbourhub.demo</p></div>;
+
+// --- ROOT APP COMPONENT ---
+const AppContent = () => {
+  const { darkMode } = useAppContext();
+  const [currentRoute, setCurrentRoute] = useState('home');
+  const [routeParams, setRouteParams] = useState({});
+
+  const navigate = (route, params = {}) => {
+    setCurrentRoute(route);
+    setRouteParams(params);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const renderView = () => {
+    switch (currentRoute) {
+      case 'home': return <Home navigate={navigate} />;
+      case 'auth': return <Auth navigate={navigate} />;
+      case 'services': return <ServicesList navigate={navigate} searchParams={routeParams} />;
+      case 'service_detail': return <ServiceDetail navigate={navigate} serviceId={routeParams.id} />;
+      case 'booking': return <BookingPage navigate={navigate} serviceId={routeParams.serviceId} />;
+      case 'dashboard_customer': return <CustomerDashboard navigate={navigate} />;
+      case 'dashboard_provider': return <ProviderDashboard navigate={navigate} />;
+      case 'dashboard_admin': return <AdminDashboard navigate={navigate} />;
+      case 'about': return <About />;
+      case 'contact': return <Contact />;
+      default: return <Home navigate={navigate} />;
+    }
+  };
+
+  return (
+    <div className={darkMode ? 'dark' : ''}>
+      <div className="min-h-screen flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300 font-sans">
+        <Navbar navigate={navigate} currentRoute={currentRoute} />
+        <div className="flex-grow">
+          {renderView()}
+        </div>
+        <Footer />
+      </div>
+    </div>
+  );
+};
+
+export default function App() {
+  return (
+    <AppProvider>
+      <AppContent />
+    </AppProvider>
+  );
+}import React, { useState, createContext, useContext, useEffect } from 'react';
+import { 
+  Search, Menu, X, User, LogOut, Star, MapPin, Calendar, 
+  Clock, CheckCircle, XCircle, Wrench, Zap, BookOpen, Truck, 
+  Moon, Sun, Plus, Shield, ArrowRight, DollarSign
+} from 'lucide-react';
+
+// --- MOCK DATABASE (Simulating MongoDB) ---
+const INITIAL_USERS = [
+  { id: 'u1', name: 'Alice Customer', email: 'alice@test.com', password: 'pass', role: 'customer' },
+  { id: 'u2', name: 'Bob Plumber', email: 'bob@test.com', password: 'pass', role: 'provider', phone: '123-456-7890' },
+  { id: 'u3', name: 'Carol Electrician', email: 'carol@test.com', password: 'pass', role: 'provider', phone: '098-765-4321' },
+  { id: 'u4', name: 'Dave Admin', email: 'admin@test.com', password: 'pass', role: 'admin' },
+];
+
+const INITIAL_SERVICES = [
+  { id: 's1', providerId: 'u2', category: 'Plumber', title: 'Emergency Pipe Repair', description: 'Fast and reliable pipe fixing within hours.', price: 50, location: 'Downtown', rating: 4.8, reviews: 12 },
+  { id: 's2', providerId: 'u2', category: 'Plumber', title: 'Full Bathroom Fitting', description: 'Complete bathroom renovation and plumbing.', price: 500, location: 'Northside', rating: 4.5, reviews: 8 },
+  { id: 's3', providerId: 'u3', category: 'Electrician', title: 'Wiring & Circuit Fix', description: 'Safe and certified electrical repairs.', price: 80, location: 'All Areas', rating: 4.9, reviews: 24 },
+  { id: 's4', providerId: 'u3', category: 'Electrician', title: 'Light Fixture Installation', description: 'Modern lighting setup for homes.', price: 40, location: 'West End', rating: 4.7, reviews: 15 },
+];
+
+const INITIAL_BOOKINGS = [
+  { id: 'b1', customerId: 'u1', serviceId: 's1', providerId: 'u2', date: '2026-05-10', time: '10:00 AM', status: 'pending', address: '123 Main St' },
+  { id: 'b2', customerId: 'u1', serviceId: 's3', providerId: 'u3', date: '2026-05-12', time: '02:00 PM', status: 'accepted', address: '123 Main St' },
+];
+
+// --- CONTEXT (Simulating Backend API & State Management) ---
+const AppContext = createContext();
+
+const AppProvider = ({ children }) => {
+  const [users, setUsers] = useState(INITIAL_USERS);
+  const [services, setServices] = useState(INITIAL_SERVICES);
+  const [bookings, setBookings] = useState(INITIAL_BOOKINGS);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [darkMode, setDarkMode] = useState(false);
+
+  // Auth APIs
+  const login = (email, password) => {
+    const user = users.find(u => u.email === email && u.password === password);
+    if (user) {
+      setCurrentUser(user);
+      return { success: true };
+    }
+    return { success: false, message: 'Invalid credentials' };
+  };
+
+  const signup = (userData) => {
+    if (users.find(u => u.email === userData.email)) {
+      return { success: false, message: 'Email already exists' };
+    }
+    const newUser = { ...userData, id: `u${Date.now()}` };
+    setUsers([...users, newUser]);
+    setCurrentUser(newUser);
+    return { success: true };
+  };
+
+  const logout = () => setCurrentUser(null);
+
+  // Service APIs
+  const addService = (serviceData) => {
+    const newService = { ...serviceData, id: `s${Date.now()}`, providerId: currentUser.id, rating: 0, reviews: 0 };
+    setServices([...services, newService]);
+  };
+
+  const deleteService = (id) => setServices(services.filter(s => s.id !== id));
+
+  // Booking APIs
+  const createBooking = (bookingData) => {
+    const newBooking = { ...bookingData, id: `b${Date.now()}`, customerId: currentUser.id, status: 'pending' };
+    setBookings([...bookings, newBooking]);
+    return { success: true };
+  };
+
+  const updateBookingStatus = (id, status) => {
+    setBookings(bookings.map(b => b.id === id ? { ...b, status } : b));
+  };
+
+  const toggleDarkMode = () => setDarkMode(!darkMode);
+
+  return (
+    <AppContext.Provider value={{
+      users, services, bookings, currentUser, darkMode,
+      login, signup, logout, addService, deleteService, createBooking, updateBookingStatus, toggleDarkMode
+    }}>
+      {children}
+    </AppContext.Provider>
+  );
+};
+
+export const useAppContext = () => useContext(AppContext);
+
+// --- REUSABLE COMPONENTS ---
+const Button = ({ children, variant = 'primary', className = '', ...props }) => {
+  const baseStyle = "px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed";
+  const variants = {
+    primary: "bg-blue-600 text-white hover:bg-blue-700 shadow-md",
+    secondary: "bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600",
+    outline: "border-2 border-blue-600 text-blue-600 hover:bg-blue-50 dark:border-blue-500 dark:text-blue-500 dark:hover:bg-blue-900/20",
+    danger: "bg-red-500 text-white hover:bg-red-600",
+    success: "bg-green-500 text-white hover:bg-green-600",
+    ghost: "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
+  };
+  return (
+    <button className={`${baseStyle} ${variants[variant]} ${className}`} {...props}>
+      {children}
+    </button>
+  );
+};
+
+const Input = ({ label, className = '', ...props }) => (
+  <div className={`flex flex-col gap-1 ${className}`}>
+    {label && <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>}
+    <input 
+      className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+      {...props}
+    />
+  </div>
+);
+
+const Badge = ({ children, type = 'default' }) => {
+  const types = {
+    default: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
+    success: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+    warning: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+    danger: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+    blue: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
+  };
+  return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${types[type]}`}>{children}</span>;
+}
+
+// --- PAGE COMPONENTS ---
+
+const Home = ({ navigate }) => {
+  const { services } = useAppContext();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [location, setLocation] = useState('');
+
+  const categories = [
+    { name: 'Plumber', icon: Wrench, color: 'text-orange-500', bg: 'bg-orange-100 dark:bg-orange-900/20' },
+    { name: 'Electrician', icon: Zap, color: 'text-yellow-500', bg: 'bg-yellow-100 dark:bg-yellow-900/20' },
+    { name: 'Tutor', icon: BookOpen, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/20' },
+    { name: 'Delivery', icon: Truck, color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/20' },
+  ];
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    navigate('services', { search: searchTerm, location });
+  };
+
+  return (
+    <div className="flex flex-col gap-16 pb-16">
+      {/* Hero Section */}
+      <section className="relative bg-blue-600 dark:bg-blue-900 text-white py-24 px-4 overflow-hidden">
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white to-transparent"></div>
+        <div className="max-w-4xl mx-auto text-center relative z-10">
+          <h1 className="text-4xl md:text-6xl font-bold mb-6 tracking-tight">Your Neighbourhood Experts, <br/>Just a Click Away.</h1>
+          <p className="text-lg md:text-xl text-blue-100 mb-10">Find trusted plumbers, electricians, tutors, and more in your local area instantly.</p>
+          
+          <form onSubmit={handleSearch} className="bg-white dark:bg-gray-800 p-2 rounded-2xl shadow-2xl flex flex-col md:flex-row gap-2 max-w-3xl mx-auto">
+            <div className="flex-1 flex items-center px-4 py-2 border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700">
+              <Search className="text-gray-400 w-5 h-5 mr-3" />
+              <input 
+                type="text" 
+                placeholder="What service do you need?" 
+                className="w-full bg-transparent text-gray-900 dark:text-white outline-none"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div className="flex-1 flex items-center px-4 py-2">
+              <MapPin className="text-gray-400 w-5 h-5 mr-3" />
+              <input 
+                type="text" 
+                placeholder="Your location" 
+                className="w-full bg-transparent text-gray-900 dark:text-white outline-none"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+              />
+            </div>
+            <Button type="submit" className="md:w-auto w-full py-3 px-8 rounded-xl text-lg">Search</Button>
+          </form>
+        </div>
+      </section>
+
+      {/* Categories */}
+      <section className="max-w-7xl mx-auto px-4 w-full">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-8">Explore Categories</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          {categories.map(cat => (
+            <div 
+              key={cat.name} 
+              onClick={() => navigate('services', { category: cat.name })}
+              className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all"
+            >
+              <div className={`p-4 rounded-full ${cat.bg}`}>
+                <cat.icon className={`w-8 h-8 ${cat.color}`} />
+              </div>
+              <span className="font-medium text-gray-800 dark:text-gray-200">{cat.name}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Featured Services */}
+      <section className="max-w-7xl mx-auto px-4 w-full bg-gray-50 dark:bg-gray-800/50 py-12 rounded-3xl">
+        <div className="flex justify-between items-end mb-8">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Highly Rated Services</h2>
+            <p className="text-gray-600 dark:text-gray-400">Trusted professionals based on user reviews.</p>
+          </div>
+          <Button variant="ghost" onClick={() => navigate('services')}>View All <ArrowRight className="w-4 h-4" /></Button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {services.slice(0, 3).map(service => (
+             <ServiceCard key={service.id} service={service} navigate={navigate} />
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+};
+
+const ServiceCard = ({ service, navigate }) => {
+  const { users } = useAppContext();
+  const provider = users.find(u => u.id === service.providerId);
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-shadow flex flex-col h-full">
+      <div className="h-48 bg-gray-200 dark:bg-gray-700 relative flex items-center justify-center">
+         {/* Placeholder Image logic based on category */}
+         {service.category === 'Plumber' && <Wrench className="w-16 h-16 text-gray-400 opacity-50" />}
+         {service.category === 'Electrician' && <Zap className="w-16 h-16 text-gray-400 opacity-50" />}
+         <Badge type="blue" className="absolute top-4 left-4 shadow-sm">{service.category}</Badge>
+      </div>
+      <div className="p-6 flex flex-col flex-grow">
+        <div className="flex justify-between items-start mb-2">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white line-clamp-1">{service.title}</h3>
+          <div className="flex items-center gap-1 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-1 rounded text-sm font-medium">
+            <Star className="w-4 h-4 fill-current" /> {service.rating}
+          </div>
+        </div>
+        <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-2">{service.description}</p>
+        
+        <div className="mt-auto space-y-3">
+          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+            <User className="w-4 h-4" /> {provider?.name}
+          </div>
+          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-4">
+            <MapPin className="w-4 h-4" /> {service.location}
+          </div>
+          <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
+            <div className="font-bold text-2xl text-gray-900 dark:text-white">${service.price}</div>
+            <Button onClick={() => navigate('service_detail', { id: service.id })}>View Details</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Auth = ({ navigate }) => {
+  const { login, signup, currentUser } = useAppContext();
+  const [isLogin, setIsLogin] = useState(true);
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'customer' });
+  const [error, setError] = useState('');
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (currentUser) {
+      navigate(`dashboard_${currentUser.role}`);
+    }
+  }, [currentUser, navigate]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setError('');
+    
+    if (isLogin) {
+      const res = login(formData.email, formData.password);
+      if (!res.success) setError(res.message);
+    } else {
+      if (!formData.name || !formData.email || !formData.password) {
+        setError("All fields are required.");
+        return;
+      }
+      const res = signup(formData);
+      if (!res.success) setError(res.message);
+    }
+  };
+
+  return (
+    <div className="min-h-[80vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700">
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{isLogin ? 'Welcome Back' : 'Create Account'}</h2>
+          <p className="text-gray-500 dark:text-gray-400 mt-2">{isLogin ? 'Sign in to access your dashboard' : 'Join NeighbourHub today'}</p>
+        </div>
+
+        {error && <div className="bg-red-50 text-red-500 p-3 rounded-lg mb-6 text-sm text-center">{error}</div>}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {!isLogin && (
+            <>
+              <Input 
+                label="Full Name" 
+                placeholder="John Doe" 
+                value={formData.name}
+                onChange={e => setFormData({...formData, name: e.target.value})}
+              />
+              <div className="flex gap-4 p-1 bg-gray-100 dark:bg-gray-900 rounded-lg">
+                <button
+                  type="button"
+                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${formData.role === 'customer' ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'}`}
+                  onClick={() => setFormData({...formData, role: 'customer'})}
+                >Customer</button>
+                <button
+                  type="button"
+                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${formData.role === 'provider' ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'}`}
+                  onClick={() => setFormData({...formData, role: 'provider'})}
+                >Service Provider</button>
+              </div>
+            </>
+          )}
+          <Input 
+            type="email" 
+            label="Email Address" 
+            placeholder="you@example.com" 
+            value={formData.email}
+            onChange={e => setFormData({...formData, email: e.target.value})}
+          />
+          <Input 
+            type="password" 
+            label="Password" 
+            placeholder="••••••••" 
+            value={formData.password}
+            onChange={e => setFormData({...formData, password: e.target.value})}
+          />
+          
+          <Button type="submit" className="w-full py-3">{isLogin ? 'Sign In' : 'Sign Up'}</Button>
+        </form>
+
+        <p className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
+          {isLogin ? "Don't have an account? " : "Already have an account? "}
+          <button onClick={() => { setIsLogin(!isLogin); setError(''); }} className="font-semibold text-blue-600 hover:text-blue-500">
+            {isLogin ? 'Sign up' : 'Sign in'}
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+};
+
+const ServicesList = ({ navigate, searchParams }) => {
+  const { services } = useAppContext();
+  const [filteredServices, setFilteredServices] = useState(services);
+  const [filterCat, setFilterCat] = useState(searchParams?.category || 'All');
+
+  useEffect(() => {
+    let result = services;
+    if (filterCat !== 'All') {
+      result = result.filter(s => s.category === filterCat);
+    }
+    if (searchParams?.search) {
+      const lowerSearch = searchParams.search.toLowerCase();
+      result = result.filter(s => s.title.toLowerCase().includes(lowerSearch) || s.description.toLowerCase().includes(lowerSearch));
+    }
+    setFilteredServices(result);
+  }, [services, filterCat, searchParams]);
+
+  const categories = ['All', 'Plumber', 'Electrician', 'Tutor', 'Delivery'];
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-8 flex flex-col md:flex-row gap-8">
+      {/* Sidebar Filters */}
+      <aside className="w-full md:w-64 flex-shrink-0">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 sticky top-24">
+          <h3 className="font-bold text-lg mb-4 text-gray-900 dark:text-white">Filters</h3>
+          
+          <div className="mb-6">
+            <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wider">Categories</h4>
+            <div className="space-y-2">
+              {categories.map(cat => (
+                <label key={cat} className="flex items-center gap-3 cursor-pointer">
+                  <input 
+                    type="radio" 
+                    name="category" 
+                    className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    checked={filterCat === cat}
+                    onChange={() => setFilterCat(cat)}
+                  />
+                  <span className="text-gray-700 dark:text-gray-300">{cat}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            {searchParams?.search ? `Search results for "${searchParams.search}"` : 'All Services'}
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-2">Showing {filteredServices.length} results</p>
+        </div>
+
+        {filteredServices.length === 0 ? (
+          <div className="text-center py-20 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-dashed border-gray-300 dark:border-gray-600">
+            <Search className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-2">No services found</h3>
+            <p className="text-gray-500">Try adjusting your filters or search terms.</p>
+            <Button className="mt-4" onClick={() => setFilterCat('All')}>Clear Filters</Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            {filteredServices.map(service => (
+              <ServiceCard key={service.id} service={service} navigate={navigate} />
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+};
+
+const ServiceDetail = ({ navigate, serviceId }) => {
+  const { services, users, currentUser } = useAppContext();
+  const service = services.find(s => s.id === serviceId);
+  
+  if (!service) return <div className="text-center py-20">Service not found.</div>;
+  
+  const provider = users.find(u => u.id === service.providerId);
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <Button variant="ghost" className="mb-6 -ml-4" onClick={() => navigate('services')}>&larr; Back to services</Button>
+      
+      <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden">
+        <div className="h-64 bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center relative">
+            <Badge type="blue" className="absolute top-6 left-6 text-sm">{service.category}</Badge>
+            {service.category === 'Plumber' && <Wrench className="w-24 h-24 text-blue-200 dark:text-blue-800" />}
+            {service.category === 'Electrician' && <Zap className="w-24 h-24 text-yellow-200 dark:text-yellow-800" />}
+        </div>
+        
+        <div className="p-8 md:p-12">
+          <div className="flex flex-col md:flex-row justify-between items-start gap-6 mb-8">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">{service.title}</h1>
+              <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                <div className="flex items-center gap-1 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-3 py-1 rounded-full font-medium">
+                  <Star className="w-4 h-4 fill-current" /> {service.rating} ({service.reviews} reviews)
+                </div>
+                <div className="flex items-center gap-1"><MapPin className="w-4 h-4"/> {service.location}</div>
+              </div>
+            </div>
+            <div className="text-center bg-gray-50 dark:bg-gray-700 p-6 rounded-2xl min-w-[200px]">
+              <div className="text-gray-500 text-sm mb-1">Starting from</div>
+              <div className="text-4xl font-bold text-gray-900 dark:text-white mb-4">${service.price}</div>
+              <Button 
+                className="w-full py-3 text-lg"
+                onClick={() => currentUser ? navigate('booking', { serviceId: service.id }) : navigate('auth')}
+              >
+                Book Now
+              </Button>
+              {!currentUser && <p className="text-xs text-gray-500 mt-2">Requires login</p>}
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 dark:border-gray-700 pt-8 mt-8 grid md:grid-cols-3 gap-8">
+            <div className="md:col-span-2 space-y-6">
+              <section>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">About this service</h3>
+                <p className="text-gray-600 dark:text-gray-400 leading-relaxed">{service.description}</p>
+                <p className="text-gray-600 dark:text-gray-400 leading-relaxed mt-4">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+              </section>
+            </div>
+            
+            <aside className="bg-gray-50 dark:bg-gray-800/50 p-6 rounded-2xl h-fit">
+              <h3 className="font-bold text-gray-900 dark:text-white mb-4">Service Provider</h3>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-xl">
+                  {provider?.name.charAt(0)}
+                </div>
+                <div>
+                  <div className="font-medium text-gray-900 dark:text-white">{provider?.name}</div>
+                  <div className="text-sm text-gray-500">Verified Professional</div>
+                </div>
+              </div>
+              <Button variant="outline" className="w-full">Contact Provider</Button>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const BookingPage = ({ navigate, serviceId }) => {
+  const { services, createBooking } = useAppContext();
+  const service = services.find(s => s.id === serviceId);
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
+  const [address, setAddress] = useState('');
+  const [isSuccess, setIsSuccess] = useState(false);
+
+  if (!service) return null;
+
+  const handleBook = (e) => {
+    e.preventDefault();
+    createBooking({ serviceId: service.id, providerId: service.providerId, date, time, address });
+    setIsSuccess(true);
+  };
+
+  if (isSuccess) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-20 text-center">
+        <div className="w-20 h-20 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
+          <CheckCircle className="w-10 h-10" />
+        </div>
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Booking Confirmed!</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-8">Your request for {service.title} has been sent to the provider. You can track its status in your dashboard.</p>
+        <Button onClick={() => navigate('dashboard_customer')} className="w-full">Go to Dashboard</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-12">
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Complete Your Booking</h1>
+      
+      <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="flex gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-2xl mb-8">
+           <div className="w-16 h-16 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
+             <Wrench className="text-blue-500" />
+           </div>
+           <div>
+             <h3 className="font-bold text-lg text-gray-900 dark:text-white">{service.title}</h3>
+             <p className="text-gray-500 text-sm">${service.price} • {service.location}</p>
+           </div>
+        </div>
+
+        <form onSubmit={handleBook} className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <Input 
+              type="date" 
+              label="Select Date" 
+              required 
+              value={date}
+              onChange={e => setDate(e.target.value)}
+            />
+            <Input 
+              type="time" 
+              label="Select Time" 
+              required 
+              value={time}
+              onChange={e => setTime(e.target.value)}
+            />
+          </div>
+          <Input 
+            label="Service Address" 
+            placeholder="Enter full address details" 
+            required 
+            value={address}
+            onChange={e => setAddress(e.target.value)}
+          />
+          <div className="border-t border-gray-100 dark:border-gray-700 pt-6 mt-6">
+            <div className="flex justify-between items-center mb-6">
+              <span className="text-lg font-medium text-gray-700 dark:text-gray-300">Total to pay</span>
+              <span className="text-2xl font-bold text-gray-900 dark:text-white">${service.price}</span>
+            </div>
+            <Button type="submit" className="w-full py-4 text-lg">Confirm Booking</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// --- DASHBOARDS ---
+
+const DashboardLayout = ({ title, children, navigate }) => {
+  const { logout, currentUser } = useAppContext();
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-8 flex flex-col md:flex-row gap-8">
+      <aside className="w-full md:w-64 flex-shrink-0">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-xl">
+              {currentUser.name.charAt(0)}
+            </div>
+            <div>
+              <div className="font-bold text-gray-900 dark:text-white truncate">{currentUser.name}</div>
+              <div className="text-xs text-gray-500 uppercase tracking-wider">{currentUser.role}</div>
+            </div>
+          </div>
+          <nav className="space-y-2">
+            <Button variant="ghost" className="w-full justify-start text-blue-600 bg-blue-50 dark:bg-blue-900/20">Dashboard Home</Button>
+            <Button variant="ghost" className="w-full justify-start">Profile Settings</Button>
+            <Button 
+              variant="ghost" 
+              className="w-full justify-start text-red-500 hover:bg-red-50 hover:text-red-600"
+              onClick={() => { logout(); navigate('home'); }}
+            >
+              <LogOut className="w-4 h-4 mr-2" /> Logout
+            </Button>
+          </nav>
+        </div>
+      </aside>
+      <main className="flex-1">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">{title}</h1>
+        {children}
+      </main>
+    </div>
+  );
+};
+
+const CustomerDashboard = ({ navigate }) => {
+  const { bookings, services, currentUser } = useAppContext();
+  const myBookings = bookings.filter(b => b.customerId === currentUser.id);
+
+  const getStatusBadge = (status) => {
+    switch(status) {
+      case 'pending': return <Badge type="warning">Pending</Badge>;
+      case 'accepted': return <Badge type="success">Accepted</Badge>;
+      case 'rejected': return <Badge type="danger">Rejected</Badge>;
+      case 'completed': return <Badge type="blue">Completed</Badge>;
+      default: return <Badge>{status}</Badge>;
+    }
+  };
+
+  return (
+    <DashboardLayout title="My Bookings" navigate={navigate}>
+      {myBookings.length === 0 ? (
+        <div className="bg-white dark:bg-gray-800 p-12 rounded-2xl text-center border border-gray-100 dark:border-gray-700">
+          <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No bookings yet</h3>
+          <Button onClick={() => navigate('services')}>Explore Services</Button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {myBookings.map(booking => {
+            const service = services.find(s => s.id === booking.serviceId);
+            return (
+              <div key={booking.id} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                   <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center">
+                     <Wrench className="text-gray-500" />
+                   </div>
+                   <div>
+                     <h4 className="font-bold text-gray-900 dark:text-white">{service?.title || 'Unknown Service'}</h4>
+                     <p className="text-sm text-gray-500 flex items-center gap-2 mt-1">
+                        <Calendar className="w-3 h-3" /> {booking.date} at {booking.time}
+                     </p>
+                   </div>
+                </div>
+                <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+                   {getStatusBadge(booking.status)}
+                   <Button variant="outline" size="sm" onClick={() => navigate('service_detail', { id: booking.serviceId })}>View</Button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </DashboardLayout>
+  );
+};
+
+const ProviderDashboard = ({ navigate }) => {
+  const { bookings, services, currentUser, updateBookingStatus, addService } = useAppContext();
+  const [activeTab, setActiveTab] = useState('requests');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newService, setNewService] = useState({ title: '', category: 'Plumber', price: '', description: '', location: '' });
+
+  const myServices = services.filter(s => s.providerId === currentUser.id);
+  const myRequests = bookings.filter(b => b.providerId === currentUser.id);
+
+  const handleAddService = (e) => {
+    e.preventDefault();
+    addService({ ...newService, price: Number(newService.price) });
+    setShowAddForm(false);
+    setNewService({ title: '', category: 'Plumber', price: '', description: '', location: '' });
+  };
+
+  return (
+    <DashboardLayout title="Provider Dashboard" navigate={navigate}>
+      <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">
+        <button 
+          className={`py-3 px-6 font-medium border-b-2 transition-colors ${activeTab === 'requests' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          onClick={() => setActiveTab('requests')}
+        >Booking Requests</button>
+        <button 
+          className={`py-3 px-6 font-medium border-b-2 transition-colors ${activeTab === 'services' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          onClick={() => setActiveTab('services')}
+        >My Services</button>
+      </div>
+
+      {activeTab === 'requests' && (
+        <div className="space-y-4">
+          {myRequests.length === 0 && <p className="text-gray-500">No booking requests yet.</p>}
+          {myRequests.map(req => {
+            const service = services.find(s => s.id === req.serviceId);
+            return (
+              <div key={req.id} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
+                  <div>
+                    <Badge type="warning" className="mb-2">New Request</Badge>
+                    <h4 className="font-bold text-lg text-gray-900 dark:text-white">{service?.title}</h4>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">Requested for: <span className="font-medium text-gray-900 dark:text-white">{req.date} at {req.time}</span></p>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm">Address: {req.address}</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xl font-bold text-gray-900 dark:text-white">${service?.price}</div>
+                  </div>
+                </div>
+                {req.status === 'pending' ? (
+                  <div className="flex gap-3 mt-4 border-t border-gray-100 dark:border-gray-700 pt-4">
+                    <Button variant="success" className="flex-1" onClick={() => updateBookingStatus(req.id, 'accepted')}>Accept</Button>
+                    <Button variant="danger" className="flex-1" onClick={() => updateBookingStatus(req.id, 'rejected')}>Reject</Button>
+                  </div>
+                ) : (
+                  <div className="mt-4 border-t border-gray-100 dark:border-gray-700 pt-4 text-sm font-medium">
+                    Status: <span className={req.status === 'accepted' ? 'text-green-500' : 'text-red-500'}>{req.status.toUpperCase()}</span>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {activeTab === 'services' && (
+        <div>
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Active Listings</h3>
+            <Button onClick={() => setShowAddForm(!showAddForm)}><Plus className="w-4 h-4 mr-2"/> Add New Service</Button>
+          </div>
+
+          {showAddForm && (
+            <form onSubmit={handleAddService} className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-2xl mb-8 border border-blue-100 dark:border-blue-900/30 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="Title" required value={newService.title} onChange={e => setNewService({...newService, title: e.target.value})} />
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
+                  <select 
+                    className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={newService.category} onChange={e => setNewService({...newService, category: e.target.value})}
+                  >
+                    <option>Plumber</option><option>Electrician</option><option>Tutor</option><option>Delivery</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input type="number" label="Price ($)" required value={newService.price} onChange={e => setNewService({...newService, price: e.target.value})} />
+                <Input label="Service Area / Location" required value={newService.location} onChange={e => setNewService({...newService, location: e.target.value})} />
+              </div>
+              <Input label="Description" required value={newService.description} onChange={e => setNewService({...newService, description: e.target.value})} />
+              <div className="flex gap-3 justify-end">
+                <Button type="button" variant="ghost" onClick={() => setShowAddForm(false)}>Cancel</Button>
+                <Button type="submit">Save Service</Button>
+              </div>
+            </form>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {myServices.map(service => (
+              <div key={service.id} className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                <div>
+                  <Badge type="blue" className="mb-2 inline-block">{service.category}</Badge>
+                  <h4 className="font-bold text-gray-900 dark:text-white">{service.title}</h4>
+                  <p className="text-gray-500 text-sm mt-1">${service.price} • {service.location}</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => navigate('service_detail', { id: service.id })}>View</Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </DashboardLayout>
+  );
+};
+
+const AdminDashboard = ({ navigate }) => {
+  const { users, services, bookings } = useAppContext();
+  return (
+    <DashboardLayout title="Admin Control Panel" navigate={navigate}>
+      <div className="grid grid-cols-3 gap-6 mb-8">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+          <div className="text-gray-500 mb-1">Total Users</div>
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">{users.length}</div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+          <div className="text-gray-500 mb-1">Total Services</div>
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">{services.length}</div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+          <div className="text-gray-500 mb-1">Total Bookings</div>
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">{bookings.length}</div>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-gray-100 dark:border-gray-700">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white">Recent Users</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-gray-50 dark:bg-gray-900/50 text-gray-500">
+              <tr>
+                <th className="p-4 font-medium">Name</th>
+                <th className="p-4 font-medium">Email</th>
+                <th className="p-4 font-medium">Role</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+              {users.map(user => (
+                <tr key={user.id} className="text-gray-900 dark:text-gray-200">
+                  <td className="p-4">{user.name}</td>
+                  <td className="p-4">{user.email}</td>
+                  <td className="p-4"><Badge>{user.role}</Badge></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+};
+
+// --- MAIN LAYOUT & ROUTER ---
+
+const Navbar = ({ navigate, currentRoute }) => {
+  const { currentUser, darkMode, toggleDarkMode } = useAppContext();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const NavLinks = () => (
+    <>
+      <button onClick={() => navigate('home')} className={`font-medium ${currentRoute === 'home' ? 'text-blue-600' : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white'}`}>Home</button>
+      <button onClick={() => navigate('services')} className={`font-medium ${currentRoute === 'services' ? 'text-blue-600' : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white'}`}>Services</button>
+      <button onClick={() => navigate('about')} className="font-medium text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">About</button>
+    </>
+  );
+
+  return (
+    <nav className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg border-b border-gray-100 dark:border-gray-800">
+      <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
+        {/* Logo */}
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('home')}>
+          <div className="bg-blue-600 text-white p-2 rounded-xl">
+            <Shield className="w-6 h-6" />
+          </div>
+          <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
+            NeighbourHub
+          </span>
+        </div>
+
+        {/* Desktop Nav */}
+        <div className="hidden md:flex items-center gap-8">
+          <NavLinks />
+        </div>
+
+        {/* Actions */}
+        <div className="hidden md:flex items-center gap-4">
+          <button onClick={toggleDarkMode} className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+            {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
+          
+          {currentUser ? (
+            <Button onClick={() => navigate(`dashboard_${currentUser.role}`)}>
+              <User className="w-4 h-4" /> Dashboard
+            </Button>
+          ) : (
+            <Button onClick={() => navigate('auth')}>Log In / Sign Up</Button>
+          )}
+        </div>
+
+        {/* Mobile Toggle */}
+        <button className="md:hidden p-2 text-gray-600 dark:text-gray-300" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+          {mobileMenuOpen ? <X /> : <Menu />}
+        </button>
+      </div>
+
+      {/* Mobile Menu */}
+      {mobileMenuOpen && (
+        <div className="md:hidden absolute top-20 left-0 right-0 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 p-4 flex flex-col gap-4 shadow-lg">
+          <NavLinks />
+          <hr className="border-gray-100 dark:border-gray-800" />
+          <div className="flex justify-between items-center">
+            <span className="text-gray-600 dark:text-gray-300">Theme</span>
+            <button onClick={toggleDarkMode} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full">
+              {darkMode ? <Sun className="w-5 h-5 text-gray-300" /> : <Moon className="w-5 h-5 text-gray-600" />}
+            </button>
+          </div>
+          {currentUser ? (
+            <Button onClick={() => { navigate(`dashboard_${currentUser.role}`); setMobileMenuOpen(false); }} className="w-full">Dashboard</Button>
+          ) : (
+            <Button onClick={() => { navigate('auth'); setMobileMenuOpen(false); }} className="w-full">Log In / Sign Up</Button>
+          )}
+        </div>
+      )}
+    </nav>
+  );
+};
+
+const Footer = () => (
+  <footer className="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 pt-16 pb-8 mt-auto">
+    <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
+      <div className="col-span-1 md:col-span-2">
+        <div className="flex items-center gap-2 mb-4">
+          <Shield className="w-6 h-6 text-blue-600" />
+          <span className="text-xl font-bold text-gray-900 dark:text-white">NeighbourHub</span>
+        </div>
+        <p className="text-gray-500 dark:text-gray-400 max-w-sm">
+          Connecting local communities with trusted service professionals. Building better neighbourhoods, one service at a time.
+        </p>
+      </div>
+      <div>
+        <h4 className="font-bold text-gray-900 dark:text-white mb-4">Quick Links</h4>
+        <ul className="space-y-2 text-gray-500 dark:text-gray-400">
+          <li><a href="#" className="hover:text-blue-600">Home</a></li>
+          <li><a href="#" className="hover:text-blue-600">All Services</a></li>
+          <li><a href="#" className="hover:text-blue-600">How it Works</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 className="font-bold text-gray-900 dark:text-white mb-4">Support</h4>
+        <ul className="space-y-2 text-gray-500 dark:text-gray-400">
+          <li><a href="#" className="hover:text-blue-600">Help Center</a></li>
+          <li><a href="#" className="hover:text-blue-600">Terms of Service</a></li>
+          <li><a href="#" className="hover:text-blue-600">Privacy Policy</a></li>
+        </ul>
+      </div>
+    </div>
+    <div className="text-center text-gray-400 text-sm">
+      &copy; {new Date().getFullYear()} NeighbourHub. All rights reserved. (Simulated Demo)
+    </div>
+  </footer>
+);
+
+// Simple placeholders for About/Contact to keep file size reasonable but routing complete
+const About = () => <div className="max-w-3xl mx-auto py-20 px-4 text-center"><h1 className="text-4xl font-bold mb-4 dark:text-white">About Us</h1><p className="text-gray-600 dark:text-gray-300">We are on a mission to organize local services.</p></div>;
+const Contact = () => <div className="max-w-3xl mx-auto py-20 px-4 text-center"><h1 className="text-4xl font-bold mb-4 dark:text-white">Contact</h1><p className="text-gray-600 dark:text-gray-300">support@neighbourhub.demo</p></div>;
+
+// --- ROOT APP COMPONENT ---
+const AppContent = () => {
+  const { darkMode } = useAppContext();
+  const [currentRoute, setCurrentRoute] = useState('home');
+  const [routeParams, setRouteParams] = useState({});
+
+  const navigate = (route, params = {}) => {
+    setCurrentRoute(route);
+    setRouteParams(params);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const renderView = () => {
+    switch (currentRoute) {
+      case 'home': return <Home navigate={navigate} />;
+      case 'auth': return <Auth navigate={navigate} />;
+      case 'services': return <ServicesList navigate={navigate} searchParams={routeParams} />;
+      case 'service_detail': return <ServiceDetail navigate={navigate} serviceId={routeParams.id} />;
+      case 'booking': return <BookingPage navigate={navigate} serviceId={routeParams.serviceId} />;
+      case 'dashboard_customer': return <CustomerDashboard navigate={navigate} />;
+      case 'dashboard_provider': return <ProviderDashboard navigate={navigate} />;
+      case 'dashboard_admin': return <AdminDashboard navigate={navigate} />;
+      case 'about': return <About />;
+      case 'contact': return <Contact />;
+      default: return <Home navigate={navigate} />;
+    }
+  };
+
+  return (
+    <div className={darkMode ? 'dark' : ''}>
+      <div className="min-h-screen flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300 font-sans">
+        <Navbar navigate={navigate} currentRoute={currentRoute} />
+        <div className="flex-grow">
+          {renderView()}
+        </div>
+        <Footer />
+      </div>
+    </div>
+  );
+};
+
+export default function App() {
+  return (
+    <AppProvider>
+      <AppContent />
+    </AppProvider>
+  );
+}
