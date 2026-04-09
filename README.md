@@ -1,7 +1,10 @@
 ## Kalpathon Hackathon Submission
 
 * Team Name
-tech.codex]
+[shweta devi
+amrita kumari
+gudiya yadav]
+
 
 * Project Name
 
